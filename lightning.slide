@@ -1,0 +1,112 @@
+s3gof3r: Fast streaming S3 client
+
+23 April 2014
+
+Randall McPherson
+Engineer at CodeGuard
+@rlmcpherson 
+
+
+
+* s3gof3r: What is it?
+- Streaming parallelized S3 client: pipe in, out, all around
+- parallel gets and puts (multipart upload)
+- go library: implements io.Reader, io.Writer interfaces
+- command-line tool: gof3r
+
+* Fast: saturate a 10 gigabit EC2 instance with a single stream up or down
+
+* Use cases
+  tar -czf - <foo_dir/> | gof3r put -b <s3_bucket> -k <foo>    
+  gof3r get -b <s3_bucket> -k <foo> | tar -zx
+
+Parallel gzip with pigz
+
+  gof3r get -b <s3_bucket> -k <foo> | pigz -dc | tar -x
+
+Stream processing from S3 to S3, never hit the disk
+
+
+  gof3r get -b <s3_bucket> -k <foo> | <do_some_stream_processing> | gof3r put -b <s3_bucket> -k <foo> 
+
+* Why another S3 tool? 
+
+* Client fragility
+- Robustness to transient network issues
+- Fail on large (10GB+) transfers, start over
+- Some are slow
+- Faster ones: lacking features, dependencies
+
+* Why choose Go?
+- concurrency
+- profiling: essential for optimization
+- awesome http library
+- statically-linked binaries
+
+* Features
+- Memory efficiency with go buffer pooling
+- Retry all network errors, essential with high speed S3
+- parallel MD5-ing of the stream to verify integrity 
+- Configurable concurrency, other options
+- and streaming
+
+It can also upload or download normal files.
+
+* Example usage
+
+.play example.go /STARTEXAMPLE/,/STOPEXAMPLE/
+
+* EC2 <-> S3 at 10 Gbps
+- Normal EC2 won't work. Tops out ~2 Gbps on "10 gigabit" instances
+- Must use "enhanced networking" in a Virtual Private Cloud (VPC)
+- Running up against the limits of MD5
+- MD5 integrity checking must be disabled
+- MD5 hashing in Go tops out at < 600 MB/s on c3.8xlarge EC2 instance (Intel Xeon E5-2680 v2 (Ivy Bridge))
+
+#  openssl enc -aes-256-ctr -pass pass:"$(dd if=/dev/urandom bs=128 count=1 2>/dev/null | base64)" -nosalt < /dev/zero | 
+#  pv -a | gof3r put -b rm-dev-repos -k randomness -c200 --md5Check-off
+# gof3r get -b rm-dev-repos -k tmp.tar --md5Check-off -c200 -s41943040 --debug | pv -a >> /dev/null
+
+#* 
+#
+#.image images/screen_cap.png
+
+* Throughput Comparison
+
+.image images/chart2.png 550 900
+
+
+
+#* Performance vs the aws cli
+#
+#
+#    [root@ip-10-0-1-147 data]# time aws s3 cp 60_GB.tar s3://rm-dev-repos/
+#    upload: ./60_GB.tar to s3://rm-dev-repos/60_GB.tar
+#
+#    real    3m56.585s
+#    user    5m4.988s
+#    sys     1m53.680s
+#
+#    [root@ip-10-0-1-147 data]# time aws s3 cp s3://rm-dev-repos/60_GB.tar .
+#    download: s3://rm-dev-repos/60_GB.tar to ./60_GB.tar
+#
+#    real    4m42.644s
+#    user    4m42.448s
+#    sys     10m12.744s
+
+
+
+* Future work
+- More optimization, of course
+- Listing, delete maybe
+- Non-streaming optimizations
+
+Want to help out? Contributions welcome:
+
+.link https://github.com/rlmcpherson/s3gof3r
+
+
+#.image images/cg_logo.jpg 200 600
+
+# 220 600
+
